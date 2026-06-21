@@ -122,22 +122,26 @@ router.get('/', async (req, res) => {
                             const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
 
                             // ─────────────────────────────────────────
-                            // Session ID + Copy Button নিচে
+                            // Session ID + Copy Button (Template)
                             // ─────────────────────────────────────────
                             const msg = await sock.sendMessage(userJid, {
-                                text:
-                                    `🐰 *RABBITXMD Session ID*\n\n` +
-                                    `\`\`\`${customSessionId}\`\`\`\n\n` +
-                                    `👇 *Click the button below to copy*`,
-                                footer: '🐰 RABBITXD Bot',
-                                buttons: [
-                                    {
-                                        buttonId: `copy_session_${customSessionId}`,
-                                        buttonText: { displayText: '📋 Copy Session ID' },
-                                        type: 1
+                                templateMessage: {
+                                    hydratedTemplate: {
+                                        hydratedContentText:
+                                            `🐰 *RABBITXMD Session ID*\n\n` +
+                                            `${customSessionId}\n\n` +
+                                            `👇 Click the button below to copy`,
+                                        hydratedFooterText: '🐰 RABBITXD Bot',
+                                        hydratedButtons: [
+                                            {
+                                                quickReplyButton: {
+                                                    displayText: '📋 Copy Session ID',
+                                                    id: `copy_session_${customSessionId}`
+                                                }
+                                            }
+                                        ]
                                     }
-                                ],
-                                headerType: 1
+                                }
                             });
 
                             // MESSAGE নিচে quoted reply হিসেবে
