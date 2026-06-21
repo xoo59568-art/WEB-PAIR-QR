@@ -84,6 +84,25 @@ router.get('/', async (req, res) => {
 
             const sock = currentSocket;
 
+            // ─────────────────────────────────────────
+            // Button Click Handler — Copy Session ID
+            // ─────────────────────────────────────────
+            sock.ev.on('messages.upsert', async ({ messages, type }) => {
+                if (type !== 'notify') return;
+                const incomingMsg = messages[0];
+                if (!incomingMsg?.message) return;
+
+                const buttonId = incomingMsg.message?.buttonsResponseMessage?.selectedButtonId;
+
+                // User "Copy Session ID" button press করলে session ID আবার পাঠাবে
+                if (buttonId && buttonId.startsWith('copy_session_')) {
+                    const copiedId = buttonId.replace('copy_session_', '');
+                    await sock.sendMessage(incomingMsg.key.remoteJid, {
+                        text: `📋 *Your Session ID:*\n\n\`\`\`${copiedId}\`\`\``
+                    });
+                }
+            });
+
             sock.ev.on('connection.update', async (update) => {
                 if (isCleaningUp) return;
                 const { connection, lastDisconnect, isNewLogin } = update;
@@ -98,19 +117,35 @@ router.get('/', async (req, res) => {
                             const megaLink = await megaUpload(await fs.readFile(credsFile), `${id}.json`);
                             const megaSessionId = megaLink.replace('https://mega.nz/file/', '');
 
-// সামনে শুধু RABBITXMD- যোগ করা
-const customSessionId = `RABBITXMD-${megaSessionId}`;
+                            // Full session ID with prefix
+                            const customSessionId = `RABBITXMD-${megaSessionId}`;
+                            const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
 
-const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
+                            // ─────────────────────────────────────────
+                            // Session ID + Copy Button নিচে
+                            // ─────────────────────────────────────────
+                            const msg = await sock.sendMessage(userJid, {
+                                text:
+                                    `🐰 *RABBITXMD Session ID*\n\n` +
+                                    `\`\`\`${customSessionId}\`\`\`\n\n` +
+                                    `👇 *Click the button below to copy*`,
+                                footer: '🐰 RABBITXD Bot',
+                                buttons: [
+                                    {
+                                        buttonId: `copy_session_${customSessionId}`,
+                                        buttonText: { displayText: '📋 Copy Session ID' },
+                                        type: 1
+                                    }
+                                ],
+                                headerType: 1
+                            });
 
-const msg = await sock.sendMessage(userJid, {
-  text: customSessionId
-});
+                            // MESSAGE নিচে quoted reply হিসেবে
+                            await sock.sendMessage(userJid, {
+                                text: MESSAGE,
+                                quoted: msg
+                            });
 
-await sock.sendMessage(userJid, {
-  text: MESSAGE,
-  quoted: msg
-});
                             await delay(1000);
                         }
                     } catch (err) { console.error('Error sending session:', err); }
