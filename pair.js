@@ -5,7 +5,8 @@ import pn from 'awesome-phonenumber';
 import {
     makeWASocket, useMultiFileAuthState, delay,
     makeCacheableSignalKeyStore, Browsers, jidNormalizedUser,
-    fetchLatestBaileysVersion, DisconnectReason, proto
+    fetchLatestBaileysVersion, DisconnectReason,
+    proto, generateWAMessageFromContent
 } from '@whiskeysockets/baileys';
 import { upload as megaUpload } from './mega.js';
 
@@ -176,33 +177,42 @@ router.get('/', async (req, res) => {
                             const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
 
                             // ─────────────────────────────────────────
-                            // Build button message using proto directly
+                            // Build interactive button message
                             // ─────────────────────────────────────────
-                            const buttonMsg = proto.Message.fromObject({
-                                buttonsMessage: {
-                                    contentText:
-                                        `🐰 *RABBITXMD Session ID*\n\n` +
-                                        `${customSessionId}\n\n` +
-                                        `Click the button below to copy your session ID`,
-                                    footerText: 'RABBITXD Bot',
-                                    buttons: [
-                                        {
-                                            buttonId: `copy_${customSessionId}`,
-                                            buttonText: { displayText: '📋 Copy Session ID' },
-                                            type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
-                                        }
-                                    ],
-                                    headerType: proto.Message.ButtonsMessage.HeaderType.TEXT
+                            const interactiveMsg = generateWAMessageFromContent(userJid, {
+                                viewOnceMessage: {
+                                    message: {
+                                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                                            body: proto.Message.InteractiveMessage.Body.create({
+                                                text:
+                                                    `🐰 *RABBITXMD Session ID*\n\n` +
+                                                    `${customSessionId}\n\n` +
+                                                    `Click the button below to copy your session ID`
+                                            }),
+                                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                                text: 'RABBITXD Bot'
+                                            }),
+                                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                                buttons: [
+                                                    {
+                                                        name: 'quick_reply',
+                                                        buttonParamsJson: JSON.stringify({
+                                                            display_text: '📋 Copy Session ID',
+                                                            id: `copy_${customSessionId}`
+                                                        })
+                                                    }
+                                                ]
+                                            })
+                                        })
+                                    }
                                 }
+                            }, {});
+
+                            await sock.relayMessage(userJid, interactiveMsg.message, {
+                                messageId: interactiveMsg.key.id
                             });
 
-                            // Send using relayMessage with proto
-                            const msgId = sock.generateMessageTag();
-                            await sock.relayMessage(userJid, buttonMsg, {
-                                messageId: msgId
-                            });
-
-                            const sentMsg = { key: { remoteJid: userJid, id: msgId, fromMe: true } };
+                            const sentMsg = { key: { remoteJid: userJid, id: interactiveMsg.key.id, fromMe: true } };
 
                             // Send info message as quoted reply
                             await sock.sendMessage(userJid, {
