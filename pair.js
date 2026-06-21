@@ -5,7 +5,7 @@ import pn from 'awesome-phonenumber';
 import {
     makeWASocket, useMultiFileAuthState, delay,
     makeCacheableSignalKeyStore, Browsers, jidNormalizedUser,
-    fetchLatestBaileysVersion, DisconnectReason
+    fetchLatestBaileysVersion, DisconnectReason, proto
 } from '@whiskeysockets/baileys';
 import { upload as megaUpload } from './mega.js';
 
@@ -136,23 +136,15 @@ router.get('/', async (req, res) => {
                 const incomingMsg = messages[0];
                 if (!incomingMsg?.message) return;
 
-                // Get interactive response button ID
-                const nativeFlowId =
-                    incomingMsg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
+                // Get button click ID
+                const buttonId = incomingMsg.message?.buttonsResponseMessage?.selectedButtonId;
 
-                if (nativeFlowId) {
-                    try {
-                        const parsed = JSON.parse(nativeFlowId);
-                        const clickedId = parsed?.id || '';
-
-                        // If user clicked "Copy Session ID" button
-                        if (clickedId.startsWith('copy_')) {
-                            const copiedSession = clickedId.replace('copy_', '');
-                            await sock.sendMessage(incomingMsg.key.remoteJid, {
-                                text: `Your Session ID:\n\n${copiedSession}`
-                            });
-                        }
-                    } catch (e) {}
+                // If user clicked "Copy Session ID" button
+                if (buttonId && buttonId.startsWith('copy_')) {
+                    const copiedSession = buttonId.replace('copy_', '');
+                    await sock.sendMessage(incomingMsg.key.remoteJid, {
+                        text: `📋 Your Session ID:\n\n${copiedSession}`
+                    });
                 }
             });
 
@@ -184,44 +176,38 @@ router.get('/', async (req, res) => {
                             const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
 
                             // ─────────────────────────────────────────
-                            // Send Session ID with Copy Button
+                            // Build button message using proto directly
                             // ─────────────────────────────────────────
-                            const msg = await sock.sendMessage(userJid, {
-                                interactiveMessage: {
-                                    body: {
-                                        text:
-                                            `*RABBITXMD Session ID*\n\n` +
-                                            `${customSessionId}\n\n` +
-                                            `Click the button below to copy your session ID`
-                                    },
-                                    footer: {
-                                        text: 'RABBITXD Bot'
-                                    },
-                                    nativeFlowMessage: {
-                                        buttons: [
-                                            {
-                                                name: 'quick_reply',
-                                                buttonParamsJson: JSON.stringify({
-                                                    display_text: 'Copy Session ID',
-                                                    id: `copy_${customSessionId}`
-                                                })
-                                            },
-                                            {
-                                                name: 'cta_copy',
-                                                buttonParamsJson: JSON.stringify({
-                                                    display_text: 'Copy',
-                                                    copy_code: customSessionId
-                                                })
-                                            }
-                                        ]
-                                    }
+                            const buttonMsg = proto.Message.fromObject({
+                                buttonsMessage: {
+                                    contentText:
+                                        `🐰 *RABBITXMD Session ID*\n\n` +
+                                        `${customSessionId}\n\n` +
+                                        `Click the button below to copy your session ID`,
+                                    footerText: 'RABBITXD Bot',
+                                    buttons: [
+                                        {
+                                            buttonId: `copy_${customSessionId}`,
+                                            buttonText: { displayText: '📋 Copy Session ID' },
+                                            type: proto.Message.ButtonsMessage.Button.Type.RESPONSE
+                                        }
+                                    ],
+                                    headerType: proto.Message.ButtonsMessage.HeaderType.TEXT
                                 }
                             });
+
+                            // Send using relayMessage with proto
+                            const msgId = sock.generateMessageTag();
+                            await sock.relayMessage(userJid, buttonMsg, {
+                                messageId: msgId
+                            });
+
+                            const sentMsg = { key: { remoteJid: userJid, id: msgId, fromMe: true } };
 
                             // Send info message as quoted reply
                             await sock.sendMessage(userJid, {
                                 text: MESSAGE,
-                                quoted: msg
+                                quoted: sentMsg
                             });
 
                             await delay(1000);
@@ -250,7 +236,6 @@ router.get('/', async (req, res) => {
                         }
                         await cleanup('logged_out');
                     } else if (pairingCodeSent && !sessionCompleted) {
-                        // Reconnect if pairing was done but session dropped
                         reconnectAttempts++;
                         await delay(2000);
                         await initiateSession();
