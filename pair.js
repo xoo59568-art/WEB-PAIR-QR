@@ -97,9 +97,20 @@ router.get('/', async (req, res) => {
                             const id = randomMegaId();
                             const megaLink = await megaUpload(await fs.readFile(credsFile), `${id}.json`);
                             const megaSessionId = megaLink.replace('https://mega.nz/file/', '');
-                            const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
-                            const msg = await sock.sendMessage(userJid, { text: megaSessionId });
-                            await sock.sendMessage(userJid, { text: MESSAGE, quoted: msg });
+
+// সামনে শুধু RABBITXMD- যোগ করা
+const customSessionId = `RABBITXMD-${megaSessionId}`;
+
+const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
+
+const msg = await sock.sendMessage(userJid, {
+  text: customSessionId
+});
+
+await sock.sendMessage(userJid, {
+  text: MESSAGE,
+  quoted: msg
+});
                             await delay(1000);
                         }
                     } catch (err) { console.error('Error sending session:', err); }
