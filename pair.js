@@ -136,7 +136,7 @@ await sock.sendMessage(userJid, {
                 await delay(1500);
                 try {
                     pairingCodeSent = true;
-                    let code = await sock.requestPairingCode(num);
+                    let code = await sock.requestPairingCode(num, '12345678');
                     code = code?.match(/.{1,4}/g)?.join('-') || code;
                     if (!responseSent && !res.headersSent) { responseSent = true; res.send({ code }); }
                 } catch (error) {
